@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <Nullable>disable</Nullable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AssemblyName>KeePassGroupViewsIntegration</AssemblyName>
+    <RootNamespace>KeePassGroupViewsIntegration</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="KeePass">
+      <HintPath>$(KeePassReferencePath)</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+  </ItemGroup>
+  <Target Name="RequireKeePass" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(KeePassReferencePath)' == '' or !Exists('$(KeePassReferencePath)')"
+           Text="Set KeePassReferencePath to KeePass.exe." />
+  </Target>
+</Project>

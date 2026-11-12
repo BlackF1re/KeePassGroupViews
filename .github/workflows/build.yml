@@ -1,0 +1,147 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Test layout storage
+        run: dotnet run --project tests/KeePassGroupViews.Tests -c Release
+
+      - name: Download official KeePass 2.62
+        shell: pwsh
+        run: |
+          # Only the official archive is executed, never package scripts.
+          $package = 'https://community.chocolatey.org/api/v2/package/keepass.portable/2.62.0'
+          Invoke-WebRequest -Uri $package -OutFile KeePassChoco.nupkg
+          Copy-Item KeePassChoco.nupkg KeePassChoco.zip
+          Expand-Archive KeePassChoco.zip -DestinationPath KeePassChoco
+          $archive = Get-ChildItem KeePassChoco -Filter KeePass-Setup.zip -Recurse |
+            Select-Object -First 1
+          if (-not $archive) { throw 'The portable distribution is absent.' }
+          # Official upstream SHA-256: https://keepass.info/integrity.html
+          $expected = '49B008E4CA9E9DB9CB22E1173EC0F7676235B5309D7B47213CF81010CD1BBEED'
+          $actual = (Get-FileHash $archive.FullName -Algorithm SHA256).Hash
+          if ($actual -ne $expected) {
+            throw "Official KeePass 2.62 checksum mismatch: $actual"
+          }
+          Expand-Archive $archive.FullName -DestinationPath KeePassOfficial
+          $file = (Get-Item KeePassOfficial/KeePass.exe).FullName
+          "KEEPASS_REFERENCE=$file" >> $env:GITHUB_ENV
+
+      - name: Build plugin
+        shell: pwsh
+        run: |
+          dotnet build src/KeePassGroupViews -c Release -p:KeePassReferencePath="$env:KEEPASS_REFERENCE"
+
+      - name: Build in-process KeePass integration tests
+        shell: pwsh
+        run: |
+          dotnet build tests/KeePassGroupViews.Integration -c Release -p:KeePassReferencePath="$env:KEEPASS_REFERENCE"
+
+      - name: Run UI integration tests in real KeePass
+        shell: pwsh
+        run: |
+          $exe = (Get-Item $env:KEEPASS_REFERENCE).FullName
+          New-Item -ItemType Directory -Force -Path KeePass/Plugins | Out-Null
+          Copy-Item $exe KeePass/KeePass.exe
+          $sourceDir = Split-Path $exe
+          Get-ChildItem $sourceDir -File | Where-Object { $_.Name -ne 'KeePass.exe' } |
+            Copy-Item -Destination KeePass -Force
+          Copy-Item src/KeePassGroupViews/bin/Release/net48/KeePassGroupViews.dll KeePass/Plugins/
+          Copy-Item tests/KeePassGroupViews.Integration/bin/Release/net48/KeePassGroupViewsIntegration.dll KeePass/Plugins/
+          @'
+          <?xml version="1.0" encoding="utf-8"?>
+          <Configuration>
+            <Meta><PreferUserConfiguration>false</PreferUserConfiguration></Meta>
+            <Application><Start>
+              <CheckForUpdateConfigured>true</CheckForUpdateConfigured>
+              <CheckForUpdate>false</CheckForUpdate>
+              <OpenLastFile>false</OpenLastFile>
+            </Start></Application>
+          </Configuration>
+          '@ | Set-Content -Path KeePass/KeePass.config.xml -Encoding utf8
+          ./scripts/run-integration.ps1
+
+      - name: Preserve integration runtime for Linux
+        shell: pwsh
+        run: Compress-Archive -Path KeePass/* -DestinationPath KeePassTestRuntime.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KeePassTestRuntime
+          path: KeePassTestRuntime.zip
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package | Out-Null
+          Copy-Item src/KeePassGroupViews/bin/Release/net48/KeePassGroupViews.dll package/
+          Copy-Item README.md,LICENSE package/
+          Compress-Archive -Path package/* -DestinationPath KeePassGroupViews.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KeePassGroupViews
+          path: KeePassGroupViews.zip
+
+
+  linux:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: KeePassTestRuntime
+
+      - name: Install Mono and virtual display
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mono-complete libgdiplus xvfb xauth
+
+      - name: Run integration tests under Mono
+        run: |
+          mkdir -p KeePass
+          unzip -q KeePassTestRuntime.zip -d KeePass
+          cat > KeePass/KeePass.config.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <Configuration>
+            <Meta><PreferUserConfiguration>false</PreferUserConfiguration></Meta>
+            <Application><Start>
+              <CheckForUpdateConfigured>true</CheckForUpdateConfigured>
+              <CheckForUpdate>false</CheckForUpdate>
+              <OpenLastFile>false</OpenLastFile>
+            </Start></Application>
+          </Configuration>
+          EOF
+          bash scripts/run-integration.sh
+
+  release:
+    needs: [build, linux]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: KeePassGroupViews
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" KeePassGroupViews.zip --title "$GITHUB_REF_NAME" --generate-notes
