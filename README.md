@@ -11,7 +11,7 @@ Per-group column layouts for **KeePass 2.x**. Tested on KeePass 2.62 (Windows an
 
 ## Installation
 
-Download the ZIP from [Releases](../../releases), extract `KeePassGroupViews.dll` into the KeePass `Plugins` directory, and restart KeePass.
+Download [KeePassGroupViews.dll](../../releases/latest) from the latest release, copy it into the KeePass `Plugins` directory, and restart KeePass. A ZIP package with the license and README is also available.
 
 ## Usage
 

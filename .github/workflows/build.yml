@@ -89,15 +89,16 @@ jobs:
       - name: Package
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path package | Out-Null
-          Copy-Item src/KeePassGroupViews/bin/Release/net48/KeePassGroupViews.dll package/
+          New-Item -ItemType Directory -Force -Path package,dist | Out-Null
+          Copy-Item src/KeePassGroupViews/bin/Release/net48/KeePassGroupViews.dll dist/
+          Copy-Item dist/KeePassGroupViews.dll package/
           Copy-Item README.md,LICENSE package/
-          Compress-Archive -Path package/* -DestinationPath KeePassGroupViews.zip
+          Compress-Archive -Path package/* -DestinationPath dist/KeePassGroupViews.zip
 
       - uses: actions/upload-artifact@v4
         with:
           name: KeePassGroupViews
-          path: KeePassGroupViews.zip
+          path: dist/*
 
 
   linux:
@@ -144,4 +145,4 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$GITHUB_REF_NAME" KeePassGroupViews.zip --title "$GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" KeePassGroupViews.dll KeePassGroupViews.zip --verify-tag --title "$GITHUB_REF_NAME" --notes "KeePassGroupViews for KeePass 2.62. Install KeePassGroupViews.dll in the KeePass Plugins folder and restart KeePass."
