@@ -15,13 +15,13 @@ Download [KeePassGroupViews.dll](../../releases/latest) from the latest release,
 
 ## Usage
 
-1. Configure columns with **View → Configure Columns**.
-2. Select a group, then choose **Tools → Group Views → Save columns for this group**.
-3. Switch groups to activate their saved or inherited layouts.
-4. Choose **Use inherited columns** to remove a group override.
-5. Choose **Set current columns as default** for groups without overrides.
+1. Select a group and edit columns using **View → Configure Columns**.
+2. Switch groups freely: changes to columns, widths, and order are saved automatically for the edited group.
+3. Choose **Tools → Group Views → Use inherited columns** to discard a group's override and inherit from its parent.
+4. Choose **Set current columns as default** to define the fallback for groups without overrides.
+5. Optionally choose **Save columns for this group** to pin an inherited layout without changing it.
 
-Group context menus also offer save and inherit commands. Changes to column widths and order in saved group layouts are retained when switching groups.
+Save and inherit commands are also available in the group context menu. Settings are local to KeePass and never modify the KDBX database.
 
 ## Build
 

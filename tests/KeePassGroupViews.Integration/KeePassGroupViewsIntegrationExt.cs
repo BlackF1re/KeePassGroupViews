@@ -240,8 +240,15 @@ namespace KeePassGroupViewsIntegration
             Verify(initialCount >= 2, "KeePass provides its native default columns");
             Select(social);
             Configure(Column(AceColumnType.Title), Column(AceColumnType.CustomString, "Phone"));
-            Command("Save columns for this group");
-            Verify(HasColumn("Phone"), "custom column visible in parent group");
+            // No Save command: the user's standard Configure Columns workflow
+            // must automatically become the current group's layout.
+            Verify(HasColumn("Phone"), "custom column visible after editing parent");
+            Select(wifi);
+            Verify(_entries.Columns.Count == initialCount,
+                "editing an inherited view does not change the global default");
+            Select(social);
+            Verify(_entries.Columns.Count == 2 && HasColumn("Phone"),
+                "new parent layout survives navigation without manual save");
 
             Select(telegram);
             Verify(_entries.Columns.Count == 2 && HasColumn("Phone"),
@@ -258,8 +265,8 @@ namespace KeePassGroupViewsIntegration
             Verify(_entries.Columns.Count == 2, "sibling inherits layout");
             Configure(Column(AceColumnType.Title), Column(AceColumnType.CustomString, "Phone"),
                 Column(AceColumnType.Password, "", true, 110));
-            Command("Save columns for this group");
-            Verify(_entries.Columns.Count == 3, "group override stored");
+            Verify(_entries.Columns.Count == 3,
+                "custom group view applied without explicit save");
             Verify(_entries.Items.Count == 1 &&
                 !_entries.Items[0].SubItems[2].Text.Contains("synthetic-password"),
                 "password column remains masked");
@@ -272,14 +279,31 @@ namespace KeePassGroupViewsIntegration
             Verify(_entries.Columns.Count == 3 &&
                 _entries.Columns[1].Width == 230 &&
                 _entries.Columns[1].DisplayIndex == 0,
-                "group width and order persist across switches");
+                "new group override, width and order persist without save");
 
             Command("Use inherited columns");
             Verify(_entries.Columns.Count == 2, "removing override restores inheritance");
+            Select(wifi);
+            Select(vk);
+            Verify(_entries.Columns.Count == 2 && HasColumn("Phone"),
+                "clearing an override does not recreate it on navigation");
+
+            Select(social);
+            Configure(Column(AceColumnType.Title),
+                Column(AceColumnType.CustomString, "Phone"),
+                Column(AceColumnType.CustomString, "Registration"));
+            Select(vk);
+            Verify(_entries.Columns.Count == 3 && HasColumn("Registration"),
+                "cleared child override follows subsequent parent edits");
+            Select(social);
+            Configure(Column(AceColumnType.Title),
+                Column(AceColumnType.CustomString, "Phone"));
+            Select(vk);
+            Verify(_entries.Columns.Count == 2 && !HasColumn("Registration"),
+                "inherited group follows parent changes without copying layout");
 
             Configure(Column(AceColumnType.Title),
                 Column(AceColumnType.CustomString, "Registration"));
-            Command("Save columns for this group");
             Select(wifi);
             Select(vk);
             Verify(HasColumn("Registration") && !HasColumn("Phone"),
@@ -290,7 +314,6 @@ namespace KeePassGroupViewsIntegration
             // A date sort cannot be reused for an unrelated string column.
             Configure(Column(AceColumnType.Title),
                 Column(AceColumnType.CreationTime));
-            Command("Save columns for this group");
             MethodInfo sort = _host.MainWindow.GetType().GetMethod(
                 "SortPasswordList", BindingFlags.Instance | BindingFlags.NonPublic);
             if(sort == null) throw new InvalidOperationException(
@@ -310,7 +333,6 @@ namespace KeePassGroupViewsIntegration
             Select(vk);
             Configure(Column(AceColumnType.Title),
                 Column(AceColumnType.CustomString, "Registration"));
-            Command("Save columns for this group");
 
             Verify(Hash(_fixture) == original,
                 "view operations leave KDBX file unchanged");
@@ -334,8 +356,8 @@ namespace KeePassGroupViewsIntegration
                 Column(AceColumnType.CustomString, "Phone"));
             _entries.Columns[1].Width = 237;
             _entries.Columns[1].DisplayIndex = 0;
-            Command("Save columns for this group");
-            Verify(HasColumn("Phone"), "second database stores its own override");
+            Verify(HasColumn("Phone"),
+                "second database uses edited layout without manual save");
 
             _host.MainWindow.OpenDatabase(IOConnectionInfo.FromPath(_fixture),
                 FixtureKey(), true);

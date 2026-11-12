@@ -24,6 +24,7 @@ namespace KeePassGroupViews
         private FieldInfo _sorterField;
         private string _currentRoot;
         private string _currentGroup;
+        private ColumnLayout _currentLayout;
         private bool _updating;
         private bool _disabled;
 
@@ -117,9 +118,10 @@ namespace KeePassGroupViews
         {
             if(!_disabled) Execute(() =>
             {
-                CaptureCurrentOverride();
+                CaptureChangedLayout();
                 _currentRoot = null;
                 _currentGroup = null;
+                _currentLayout = null;
             });
         }
 
@@ -252,13 +254,21 @@ namespace KeePassGroupViews
             if(selected == null) return;
             string root = _host.Database.RootGroup.Uuid.ToHexString();
             string group = selected.Uuid.ToHexString();
-            if(root == _currentRoot && group == _currentGroup) return;
+            if(root == _currentRoot && group == _currentGroup)
+            {
+                CaptureChangedLayout();
+                return;
+            }
 
-            CaptureCurrentOverride();
-            _currentRoot = root;
-            _currentGroup = group;
+            // Capture the previous group's edited columns before applying the
+            // next group's layout. An inherited view becomes an override only
+            // when the user actually changes it.
+            CaptureChangedLayout();
             ColumnLayout layout = _store.Resolve(root, AncestorIds(selected));
             Apply(layout);
+            _currentRoot = root;
+            _currentGroup = group;
+            _currentLayout = Capture();
         }
 
         private static IEnumerable<string> AncestorIds(PwGroup group)
@@ -267,11 +277,19 @@ namespace KeePassGroupViews
                 yield return g.Uuid.ToHexString();
         }
 
-        private void CaptureCurrentOverride()
+        private void CaptureChangedLayout()
         {
             if(_currentRoot == null || _currentGroup == null ||
-                !_store.HasOverride(_currentRoot, _currentGroup)) return;
-            _store.Set(_currentRoot, _currentGroup, Capture());
+                _currentLayout == null) return;
+
+            ColumnLayout current = Capture();
+            if(_currentLayout.SameAs(current)) return;
+
+            // KeePass exposes a global column configuration. Track the last
+            // layout rendered for the active group so real user edits can be
+            // distinguished from applying an inherited/default layout.
+            _store.Set(_currentRoot, _currentGroup, current);
+            _currentLayout = current.Copy();
             Persist();
         }
 
@@ -280,8 +298,10 @@ namespace KeePassGroupViews
             PwGroup group = SelectedGroup();
             if(group == null || _host.Database == null || !_host.Database.IsOpen)
                 return;
+            ColumnLayout layout = Capture();
             _store.Set(_host.Database.RootGroup.Uuid.ToHexString(),
-                group.Uuid.ToHexString(), Capture());
+                group.Uuid.ToHexString(), layout);
+            _currentLayout = layout.Copy();
             Persist();
         }
 
@@ -295,6 +315,7 @@ namespace KeePassGroupViews
             _store.Remove(root, id);
             Persist();
             Apply(_store.Resolve(root, AncestorIds(group)));
+            _currentLayout = Capture();
         }
 
         private void SaveDefault()
@@ -332,7 +353,7 @@ namespace KeePassGroupViews
         public override void Terminate()
         {
             if(_host == null) return;
-            if(!_disabled) Execute(CaptureCurrentOverride);
+            if(!_disabled) Execute(CaptureChangedLayout);
             CleanupEvents();
             _host = null;
             _groups = null;
