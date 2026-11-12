@@ -1,0 +1,96 @@
+name: Release
+run-name: Release ${{ inputs.version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (for example, 0.1.0 or 0.2.0-rc.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Validate version and source branch
+        id: version
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "::error::Select the main branch to publish a release."
+            exit 1
+          fi
+
+          version="${VERSION#v}"
+          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
+            echo "::error::Enter a version such as 0.1.0 or 0.2.0-rc.1."
+            exit 1
+          fi
+
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Reject existing version tags
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if gh api "repos/$GH_REPO/git/ref/tags/$TAG" > /dev/null 2>&1; then
+            echo "::error::Tag $TAG already exists; choose a new version."
+            exit 1
+          fi
+
+  test:
+    needs: validate
+    uses: ./.github/workflows/build.yml
+    permissions:
+      contents: read
+
+  publish:
+    needs: [validate, test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: KeePassGroupViews
+
+      - name: Create tagged release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          set -euo pipefail
+          test -s KeePassGroupViews.dll
+          test -s KeePassGroupViews.zip
+
+          if gh api "repos/$GH_REPO/git/ref/tags/$TAG" > /dev/null 2>&1; then
+            echo "::error::Tag $TAG already exists; refusing to publish over it."
+            exit 1
+          fi
+
+          args=()
+          if [[ "$TAG" == *-* ]]; then args+=(--prerelease); fi
+
+          gh release create "$TAG" KeePassGroupViews.dll KeePassGroupViews.zip \
+            --target "$GITHUB_SHA" \
+            --title "$TAG" \
+            --notes "KeePassGroupViews for KeePass 2.62. Copy KeePassGroupViews.dll into the KeePass Plugins directory and restart KeePass." \
+            "${args[@]}"
