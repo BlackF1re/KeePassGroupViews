@@ -4,6 +4,8 @@
 
 Choose which columns to show, in what order, and at what width for each group. Your layout is restored when you return to that group.
 
+![KeePass switches column layouts as you change groups](assets/demo.gif)
+
 ## Installation
 
 Copy `KeePassGroupViews.dll` from the [latest release](https://github.com/BlackF1re/KeePassGroupViews/releases/latest) to `Plugins/` and restart KeePass.
