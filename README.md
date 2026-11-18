@@ -1,34 +1,29 @@
 # KeePassGroupViews
 
-Per-group column layouts for **KeePass 2.x**. Tested on KeePass 2.62 (Windows and Linux/Mono).
+**Per-group column layouts for KeePass 2.x.** Tested on 2.62 (Windows, Linux/Mono).
 
-## Features
-
-- Automatically switch visible columns, order, and widths when selecting groups.
-- Show standard and custom entry fields using KeePass's native columns.
-- Inherit layouts from parent groups; use a default layout otherwise.
-- Keep layout settings in local KeePass configuration, without modifying KDBX entries.
+Choose which columns to show, in what order, and at what width for each group. Your layout is restored when you return to that group.
 
 ## Installation
 
-Download [KeePassGroupViews.dll](../../releases/latest) from the latest release, copy it into the KeePass `Plugins` directory, and restart KeePass. A ZIP package with the license and README is also available.
+Copy `KeePassGroupViews.dll` from the [latest release](https://github.com/BlackF1re/KeePassGroupViews/releases/latest) to `Plugins/` and restart KeePass.
 
 ## Usage
 
-1. Select a group and edit columns using **View → Configure Columns**.
-2. Switch groups freely: changes to columns, widths, and order are saved automatically for the edited group.
-3. Choose **Tools → Group Views → Use inherited columns** to discard a group's override and inherit from its parent.
-4. Choose **Set current columns as default** to define the fallback for groups without overrides.
-5. Optionally choose **Save columns for this group** to pin an inherited layout without changing it.
+- **View -> Configure Columns** - edits save automatically for the selected group.
+- **Tools -> Group Views**
+  - **Save columns for this group** - pin the current layout.
+  - **Use inherited columns** - use the nearest parent layout or the default.
+  - **Set current columns as default** - change the fallback.
 
-Save and inherit commands are also available in the group context menu. Settings are local to KeePass and never modify the KDBX database.
+> [!NOTE]
+> Layouts stay in your local KeePass configuration.
+
+> [!WARNING]
+> **Use inherited columns** removes the group's saved layout.
 
 ## Build
-
-Requires .NET SDK and an official KeePass 2.x executable.
 
 ```powershell
 dotnet build src/KeePassGroupViews -c Release -p:KeePassReferencePath="C:\Path\To\KeePass.exe"
 ```
-
-License: GPL-2.0-or-later.
